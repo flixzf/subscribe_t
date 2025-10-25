@@ -1,5 +1,7 @@
 import time
 import os
+import random
+import google.generativeai as genai
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -11,12 +13,48 @@ from webdriver_manager.chrome import ChromeDriverManager
 # Railway와 같은 배포 환경에서는 환경 변수를 사용하여 아이디와 비밀번호를 설정합니다.
 TISTORY_ID = os.environ.get("TISTORY_ID")
 TISTORY_PW = os.environ.get("TISTORY_PW")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if not TISTORY_ID or not TISTORY_PW:
-    print("오류: TISTORY_ID 또는 TISTORY_PW 환경 변수가 설정되지 않았습니다.")
+if not TISTORY_ID or not TISTORY_PW or not GEMINI_API_KEY:
+    print("오류: TISTORY_ID, TISTORY_PW, 또는 GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
     print("스크립트를 종료합니다.")
     exit()
+
+# Gemini API 설정
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 # --- 설정 끝 ---
+
+def generate_text(prompt_text):
+    """Gemini API를 사용하여 텍스트를 생성합니다."""
+    print(f"Gemini API 호출: {prompt_text}")
+    try:
+        response = model.generate_content(prompt_text)
+        generated_text = response.text.strip().replace('"', '')
+        print(f"Gemini API 응답: {generated_text}")
+        return generated_text
+    except Exception as e:
+        print(f"Gemini API 호출 중 오류 발생: {e}")
+        return None
+
+def generate_title():
+    """게시글 제목을 생성합니다."""
+    prompt = "당신은 경제 정보 블로그의 마케터입니다. '맞구독' 키워드를 필수로 포함하여, 모든 문자(띄어쓰기, 특수문자 포함)를 합쳐 28자 이하의 매력적인 블로그 소개글 제목을 1개 생성해주세요."
+    title = generate_text(prompt)
+    return title if title else "경제 정보 블로그, 맞구독 해요!"
+
+def generate_content():
+    """게시글 본문을 생성합니다."""
+    prompt = "당신은 경제 정보 블로그의 운영자입니다. '경제 관련 지식을 공유하는 블로그를 운영하고 있으며, 맞구독하면 저도 방문하겠습니다'라는 의미를 담아, 친근한 어조로 2문장의 소개글을 작성해주세요."
+    content = generate_text(prompt)
+    return content if content else "경제 지식을 나누는 블로그입니다. 맞구독 해주시면 저도 꼭 찾아갈게요!"
+
+def generate_comment():
+    """댓글 내용을 생성합니다."""
+    prompt = "당신은 경제 정보 블로그의 방문자입니다. '경제 초보를 위한 기본 지식을 전달하는 글을 쓰고 있습니다. 맞구독하고 유용한 정보를 함께 나눠요'라는 의미를 담아, 정중하고 친근한 어조로 2문장의 댓글을 작성해주세요."
+    comment = generate_text(prompt)
+    return comment if comment else "경제 초보를 위한 지식을 공유하고 있어요. 맞구독하고 좋은 정보 나눠요~"
 
 
 def setup_driver():
@@ -94,29 +132,24 @@ def create_forum_post(driver):
         title_input = driver.find_element(By.CSS_SELECTOR, "input#title")
         content_textarea = driver.find_element(By.CSS_SELECTOR, "textarea#text.textarea_form")
         
-        # 스크롤하여 입력 필드가 보이도록 함
         driver.execute_script("arguments[0].scrollIntoView(true);", title_input)
         time.sleep(1)
 
-        # 분류 선택 (블로그 소개)
         blog_intro_category = driver.find_element(By.CSS_SELECTOR, "label[for='inp02']")
         blog_intro_category.click()
         print("게시글 분류를 '블로그 소개'로 선택했습니다.")
         time.sleep(1)
 
-        # 제목 입력
-        title_text = "경제 정보를 블로그입니다. 맞구독하고 같이 성장해요!"
+        title_text = generate_title()
         print(f"제목을 입력합니다: {title_text}")
         title_input.send_keys(title_text)
         time.sleep(1)
 
-        # 본문 입력
-        content_text = "안녕하세요! 경제 및 금융 관련 지식을 쉽게 풀어쓰는 블로그를 운영하고 있습니다.\n구독해 주시면 바로 맞구독하러 달려가겠습니다. 함께 성장해요!"
+        content_text = generate_content()
         print(f"본문을 입력합니다: {content_text}")
         content_textarea.send_keys(content_text)
         time.sleep(1)
 
-        # 등록 버튼 클릭
         submit_button = driver.find_element(By.CSS_SELECTOR, "button.btn_tistory_type5[type='submit']")
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable(submit_button))
         print("등록 버튼을 클릭합니다.")
@@ -124,6 +157,12 @@ def create_forum_post(driver):
         
         time.sleep(5)
         print("게시글을 성공적으로 등록했습니다.")
+        
+        # 글 작성 후 랜덤 대기
+        wait_time = random.randint(10, 180)
+        print(f"게시글 작성 완료. {wait_time}초 동안 대기합니다...")
+        time.sleep(wait_time)
+        
         return True
 
     except Exception as e:
@@ -191,7 +230,12 @@ def leave_comment(driver, blog_url_to_find, comment_text):
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable(submit_button))
                     submit_button.click()
                     print("댓글을 성공적으로 등록했습니다.")
-                    time.sleep(3)
+                    
+                    # 댓글 작성 후 랜덤 대기
+                    wait_time = random.randint(10, 180)
+                    print(f"댓글 작성 완료. 다음 작업을 위해 {wait_time}초 동안 대기합니다...")
+                    time.sleep(wait_time)
+                    
                     return
 
             except Exception as e:
@@ -224,7 +268,6 @@ def process_forum_posts(driver):
                     author_link_element = post.find_element(By.CSS_SELECTOR, "a.txt_id")
                     blog_url = author_link_element.get_attribute('href')
                     
-                    # 자신의 블로그는 제외하고, 중복 추가 방지
                     if blog_url and "optimistic-mind" not in blog_url and blog_url not in blogs_to_process:
                         print(f"\n처리할 '맞구독' 게시글을 찾았습니다: '{title}' ({blog_url})")
                         blogs_to_process.append(blog_url)
@@ -241,11 +284,12 @@ def process_forum_posts(driver):
         return
 
     print(f"\n총 {len(blogs_to_process)}개의 블로그를 대상으로 구독 및 댓글 작업을 시작합니다.")
-    comment_text = "경제 초보를 위한 기본 지식전달을 위한 글을 쓰고있습니다. 맞구독하고 많은 정보 얻어가세요 ~"
-
+    
     for blog_url in blogs_to_process:
         was_successful = subscribe_to_blog(driver, blog_url)
         if was_successful:
+            # 각 댓글마다 새로 생성
+            comment_text = generate_comment()
             leave_comment(driver, blog_url, comment_text)
         else:
             print(f"{blog_url} 블로그는 이미 구독중이므로 댓글을 남기지 않습니다.")
@@ -255,10 +299,7 @@ if __name__ == "__main__":
     driver = setup_driver()
 
     if login_tistory(driver, TISTORY_ID, TISTORY_PW):
-        # 1. 포럼에 맞구독 요청글 먼저 작성
         create_forum_post(driver)
-        
-        # 2. 다른 사람들의 맞구독 요청글 처리
         process_forum_posts(driver)
 
     print("\n모든 자동화 작업이 완료되었습니다. 브라우저를 종료합니다.")
