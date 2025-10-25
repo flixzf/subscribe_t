@@ -1,13 +1,17 @@
 # Use a base Python image
 FROM python:3.10-slim
 
-# Install dependencies for Chrome
+# Install system dependencies, including those for GPG key management
 RUN apt-get update && apt-get install -y wget gnupg
 
-# Download and install the latest stable Google Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
+# Add the Google Chrome GPG key
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+
+# Add the Google Chrome repository
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list
+
+# Update apt and install Google Chrome
+RUN apt-get update \
     && apt-get install -y google-chrome-stable
 
 # Set up a working directory
