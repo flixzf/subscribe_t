@@ -79,3 +79,6 @@ venv.bak/
 # IDEs
 .idea/
 .vscode/
+
+# Backup files
+*.backup
