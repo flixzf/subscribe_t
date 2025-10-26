@@ -129,8 +129,12 @@ def create_forum_post(driver):
         driver.execute_script("arguments[0].scrollIntoView(true);", title_input)
         time.sleep(1)
 
-        blog_intro_category = driver.find_element(By.CSS_SELECTOR, "label[for='inp02']")
-        blog_intro_category.click()
+        # ElementClickInterceptedException 방지를 위해 JavaScript 클릭 사용
+        print("게시글 분류를 '블로그 소개'로 선택합니다.")
+        blog_intro_category = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "label[for='inp02']"))
+        )
+        driver.execute_script("arguments[0].click();", blog_intro_category)
         print("게시글 분류를 '블로그 소개'로 선택했습니다.")
         time.sleep(1)
 
