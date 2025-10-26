@@ -10,13 +10,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 # --- 설정 ---
-# Railway와 같은 배포 환경에서는 환경 변수를 사용하여 아이디와 비밀번호를 설정합니다.
-TISTORY_ID = os.environ.get("TISTORY_ID")
-TISTORY_PW = os.environ.get("TISTORY_PW")
+# Railway와 같은 배포 환경에서는 환경 변수를 사용하여 쿠키와 API 키를 설정합니다.
+T_ANO = os.environ.get("T_ANO")
+TISTORY_SESSION_COOKIE = os.environ.get("TISTORY_SESSION_COOKIE")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if not TISTORY_ID or not TISTORY_PW or not GEMINI_API_KEY:
-    print("오류: TISTORY_ID, TISTORY_PW, 또는 GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
+if not T_ANO or not TISTORY_SESSION_COOKIE or not GEMINI_API_KEY:
+    print("오류: T_ANO, TISTORY_SESSION_COOKIE, 또는 GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
     print("스크립트를 종료합니다.")
     exit()
 
@@ -66,7 +66,14 @@ def setup_driver():
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920x1080")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+        options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+
 
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
@@ -79,46 +86,33 @@ def setup_driver():
         exit()
 
 
-def login_tistory(driver, user_id, user_pw):
-    """티스토리/카카오 계정 로그인을 수행합니다."""
-    print("티스토리 로그인을 시작합니다...")
-    driver.get("https://www.tistory.com/auth/login")
-    
+def login_tistory(driver, t_ano, tistory_session):
+    """쿠키를 사용하여 티스토리 로그인을 수행합니다."""
+    print("쿠키를 사용하여 티스토리 로그인을 시작합니다...")
     try:
-        # 1. '카카오계정으로 로그인' 버튼 클릭
-        print("'카카오계정으로 로그인' 버튼을 클릭합니다.")
-        kakao_login_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.link_kakao_id"))
-        )
-        kakao_login_button.click()
+        # 쿠키를 설정하기 위해 먼저 해당 도메인으로 이동해야 합니다.
+        driver.get("https://www.tistory.com")
         
-        # 2. 이메일 입력
-        print("이메일(카카오계정)을 입력합니다.")
-        email_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='loginId']"))
-        )
-        email_input.send_keys(user_id)
+        # 기존 쿠키를 삭제하여 깨끗한 상태에서 시작
+        driver.delete_all_cookies()
+
+        # 환경 변수에서 가져온 쿠키 추가
+        print("로그인 쿠키를 추가합니다.")
+        driver.add_cookie({"name": "_T_ANO", "value": t_ano})
+        driver.add_cookie({"name": "TISTORY_SESSION", "value": tistory_session})
         
-        # 3. 비밀번호 입력
-        print("비밀번호를 입력합니다.")
-        password_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='password']"))
-        )
-        password_input.send_keys(user_pw)
+        # 쿠키가 적용되도록 페이지를 새로고침
+        print("페이지를 새로고침하여 로그인 상태를 적용합니다.")
+        driver.refresh()
         
-        # 4. '로그인' 버튼 클릭
-        print("로그인 버튼을 클릭합니다.")
-        login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        login_button.click()
-        
-        # 5. 로그인 완료 확인 (내 블로그 아이콘이 나타나는지 확인)
+        # 로그인 완료 확인 (내 블로그 아이콘이 나타나는지 확인)
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "a.link_profile"))
         )
-        print("로그인 성공!")
+        print("쿠키를 이용한 로그인 성공!")
         return True
     except Exception as e:
-        print(f"로그인 실패: {e}")
+        print(f"쿠키를 이용한 로그인 실패: {e}")
         return False
 
 def create_forum_post(driver):
@@ -298,7 +292,7 @@ def process_forum_posts(driver):
 if __name__ == "__main__":
     driver = setup_driver()
 
-    if login_tistory(driver, TISTORY_ID, TISTORY_PW):
+    if login_tistory(driver, T_ANO, TISTORY_SESSION_COOKIE):
         create_forum_post(driver)
         process_forum_posts(driver)
 
